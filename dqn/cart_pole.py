@@ -29,13 +29,13 @@ class MyModel(tf.keras.Model):
 class DQN:
     def __init__(self, num_states, num_actions, hidden_units, gamma, max_experiences, min_experiences, batch_size, lr):
         self.num_actions = num_actions
+        self.batch_size = batch_size
+        self.optimizer = tf.optimizers.Adam(lr)
         self.gamma = gamma
+        self.model = MyModel(num_states, hidden_units, num_actions)
+        self.experience = {'s': [], 'a': [], 'r': [], 's2': [], 'done': []}
         self.max_experiences = max_experiences
         self.min_experiences = min_experiences
-        self.batch_size = batch_size
-        self.model = MyModel(num_states, hidden_units, num_actions)
-        self.optimizer = tf.optimizers.Adam(lr)
-        self.experience = {'s': [], 'a': [], 'r': [], 's2': [], 'done': []}
 
     def predict(self, inputs):
         return self.model(np.atleast_2d(inputs.astype('float32')))
@@ -51,12 +51,12 @@ class DQN:
         states_next = np.asarray([self.experience['s2'][i] for i in ids])
         dones = np.asarray([self.experience['done'][i] for i in ids])
         value_next = np.max(TargetNet.predict(states_next), axis=1)
-        targets = np.where(dones, rewards, rewards+self.gamma*value_next)
+        actual_values = np.where(dones, rewards, rewards+self.gamma*value_next)
 
         with tf.GradientTape() as tape:
             selected_action_values = tf.math.reduce_sum(
                 self.predict(states) * tf.one_hot(actions, self.num_actions), axis=1)
-            loss = tf.math.reduce_sum(tf.square(targets - selected_action_values))
+            loss = tf.math.reduce_sum(tf.square(actual_values - selected_action_values))
         variables = self.model.trainable_variables
         gradients = tape.gradient(loss, variables)
         self.optimizer.apply_gradients(zip(gradients, variables))
@@ -85,7 +85,6 @@ class DQN:
 def play_game(env, TrainNet, TargetNet, epsilon, copy_step):
     rewards = 0
     iter = 0
-    copy_step = copy_step
     done = False
     observations = env.reset()
     while not done:
@@ -138,13 +137,13 @@ def main():
 
     TrainNet = DQN(num_states, num_actions, hidden_units, gamma, max_experiences, min_experiences, batch_size, lr)
     TargetNet = DQN(num_states, num_actions, hidden_units, gamma, max_experiences, min_experiences, batch_size, lr)
-    N = 10000
-    totalrewards = np.empty(N)
+    N = 5000
+    total_rewards = np.empty(N)
     for n in range(N):
         epsilon = 1.0 / np.sqrt(n + 1)
-        total_reward= play_game(env, TrainNet, TargetNet, epsilon, copy_step)
-        totalrewards[n] = total_reward
-        avg_rewards = totalrewards[max(0, n - 100):(n + 1)].mean()
+        total_reward = play_game(env, TrainNet, TargetNet, epsilon, copy_step)
+        total_rewards[n] = total_reward
+        avg_rewards = total_rewards[max(0, n - 100):(n + 1)].mean()
         with summary_writer.as_default():
             tf.summary.scalar('episode reward', total_reward, step=n)
             tf.summary.scalar('running avg reward(100)', avg_rewards, step=n)
