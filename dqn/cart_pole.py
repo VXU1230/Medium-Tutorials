@@ -137,10 +137,13 @@ def main():
 
     TrainNet = DQN(num_states, num_actions, hidden_units, gamma, max_experiences, min_experiences, batch_size, lr)
     TargetNet = DQN(num_states, num_actions, hidden_units, gamma, max_experiences, min_experiences, batch_size, lr)
-    N = 5000
+    N = 50000
     total_rewards = np.empty(N)
+    epsilon = 0.99
+    decay = 0.9999
+    min_epsilon = 0.1
     for n in range(N):
-        epsilon = 1.0 / np.sqrt(n + 1)
+        epsilon = max(min_epsilon, epsilon * decay)
         total_reward = play_game(env, TrainNet, TargetNet, epsilon, copy_step)
         total_rewards[n] = total_reward
         avg_rewards = total_rewards[max(0, n - 100):(n + 1)].mean()
@@ -155,7 +158,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    for i in range(3):
+        main()
 
 
 
