@@ -3,6 +3,7 @@ import tensorflow as tf
 import gym
 import os
 import datetime
+from statistics import mean
 from gym import wrappers
 
 
@@ -40,7 +41,6 @@ class DQN:
     def predict(self, inputs):
         return self.model(np.atleast_2d(inputs.astype('float32')))
 
-    @tf.function
     def train(self, TargetNet):
         if len(self.experience['s']) < self.min_experiences:
             return 0
@@ -56,11 +56,11 @@ class DQN:
         with tf.GradientTape() as tape:
             selected_action_values = tf.math.reduce_sum(
                 self.predict(states) * tf.one_hot(actions, self.num_actions), axis=1)
-            loss = tf.math.reduce_sum(tf.square(actual_values - selected_action_values))
+            loss = tf.math.reduce_mean(tf.square(actual_values - selected_action_values))
         variables = self.model.trainable_variables
         gradients = tape.gradient(loss, variables)
         self.optimizer.apply_gradients(zip(gradients, variables))
-
+        return loss
 
     def get_action(self, states, epsilon):
         if np.random.random() < epsilon:
@@ -87,6 +87,7 @@ def play_game(env, TrainNet, TargetNet, epsilon, copy_step):
     iter = 0
     done = False
     observations = env.reset()
+    losses = list()
     while not done:
         action = TrainNet.get_action(observations, epsilon)
         prev_observations = observations
@@ -98,12 +99,15 @@ def play_game(env, TrainNet, TargetNet, epsilon, copy_step):
 
         exp = {'s': prev_observations, 'a': action, 'r': reward, 's2': observations, 'done': done}
         TrainNet.add_experience(exp)
-        TrainNet.train(TargetNet)
+        loss = TrainNet.train(TargetNet)
+        if isinstance(loss, int):
+            losses.append(loss)
+        else:
+            losses.append(loss.numpy())
         iter += 1
         if iter % copy_step == 0:
             TargetNet.copy_weights(TrainNet)
-    return rewards
-
+    return rewards, mean(losses)
 
 def make_video(env, TrainNet):
     env = wrappers.Monitor(env, os.path.join(os.getcwd(), "videos"), force=True)
@@ -144,14 +148,16 @@ def main():
     min_epsilon = 0.1
     for n in range(N):
         epsilon = max(min_epsilon, epsilon * decay)
-        total_reward = play_game(env, TrainNet, TargetNet, epsilon, copy_step)
+        total_reward, losses = play_game(env, TrainNet, TargetNet, epsilon, copy_step)
         total_rewards[n] = total_reward
         avg_rewards = total_rewards[max(0, n - 100):(n + 1)].mean()
         with summary_writer.as_default():
             tf.summary.scalar('episode reward', total_reward, step=n)
             tf.summary.scalar('running avg reward(100)', avg_rewards, step=n)
+            tf.summary.scalar('average loss)', losses, step=n)
         if n % 100 == 0:
-            print("episode:", n, "episode reward:", total_reward, "eps:", epsilon, "avg reward (last 100):", avg_rewards)
+            print("episode:", n, "episode reward:", total_reward, "eps:", epsilon, "avg reward (last 100):", avg_rewards,
+                  "episode loss: ", losses)
     print("avg reward for last 100 episodes:", avg_rewards)
     make_video(env, TrainNet)
     env.close()
@@ -160,12 +166,3 @@ def main():
 if __name__ == '__main__':
     for i in range(3):
         main()
-
-
-
-
-
-
-
-
-
