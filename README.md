@@ -11,3 +11,7 @@
 # em
 
 #### source code for tutorial: https://towardsdatascience.com/implement-expectation-maximization-em-algorithm-in-python-from-scratch-f1278d1b9137
+
+# policy_gradient
+
+#### source code for tutorial : https://towardsdatascience.com/policy-gradient-reinforce-algorithm-with-baseline-e95ace11c1c4
