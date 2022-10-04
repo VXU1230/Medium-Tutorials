@@ -86,7 +86,7 @@ def play_game(env, TrainNet, TargetNet, epsilon, copy_step):
     rewards = 0
     iter = 0
     done = False
-    observations = env.reset()
+    observations, _ = env.reset()
     losses = list()
     while not done:
         action = TrainNet.get_action(observations, epsilon)
